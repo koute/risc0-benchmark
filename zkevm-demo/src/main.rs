@@ -28,7 +28,7 @@ use zkevm_methods::EVM_ELF;
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "0x600d18676aef439ec6ba33d143b78878a520682be7fd8331c74bdf672988a2b1")]
     tx_hash: String,
 
     #[clap(short, long, default_value = "https://rpc.flashbots.net/")]
