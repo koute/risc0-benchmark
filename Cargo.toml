@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "zkevm-demo",
+    "zkevm-demo/core",
+    "zkevm-demo/methods",
+]
