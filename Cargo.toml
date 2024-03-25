@@ -5,3 +5,8 @@ members = [
     "zkevm-demo/core",
     "zkevm-demo/methods",
 ]
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1

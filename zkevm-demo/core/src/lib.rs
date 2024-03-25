@@ -12,11 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![cfg_attr(target_feature = "e", no_std)]
+
 use revm::{
     primitives::{AccountInfo, Address, Bytecode, State, SuccessReason, B256},
     Database,
 };
 use serde::{Deserialize, Serialize};
+
+extern crate alloc;
+use alloc::vec::Vec;
 
 // Re-export for external usage.
 pub use primitive_types::H256;
@@ -38,7 +43,7 @@ impl<T> ResTrack<T>
 where
     T: Clone,
 {
-    #[cfg(not(target_os = "zkvm"))]
+    #[cfg(not(any(target_os = "zkvm", target_feature = "e")))]
     pub fn reset(&mut self) {
         self.idx = 0;
     }
@@ -49,7 +54,7 @@ where
         res
     }
 
-    #[cfg(not(target_os = "zkvm"))]
+    #[cfg(not(any(target_os = "zkvm", target_feature = "e")))]
     pub fn set(&mut self, elm: &T) {
         self.elms.push(elm.clone());
     }

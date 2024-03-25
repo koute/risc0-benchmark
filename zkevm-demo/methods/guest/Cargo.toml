@@ -6,8 +6,23 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-risc0-zkvm = { version = "0.21.0", default-features = false, features = [ "std" ] }
 zkevm-core = { path = "../../core", default-features = false }
 
+[target.'cfg(target_feature = "e")'.dependencies]
+polkavm-derive = { version = "0.9" }
+serde = { version = "1.0", default-features = false }
+bincode = { version = "2.0.0-rc.3", default-features = false, features = ["alloc", "serde"] }
+
+[target.'cfg(not(target_feature = "e"))'.dependencies]
+risc0-zkvm = { version = "0.21.0", default-features = false, features = [ "std" ] }
+
 [patch.crates-io]
-radium = { git = 'https://github.com/ferrilab/radium.git', rev = "723bed5" }
+radium = { git = "https://github.com/paritytech/radium-0.7-fork.git", rev = "a5da15a15c90fd169d661d206cf0db592487f52b" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1

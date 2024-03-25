@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+bincode = { version = "2.0.0-rc.3", default-features = false, features = ["alloc", "serde"] }
 clap = { version = "4.0", features = ["derive"] }
 ethers-core = "2.0"
 ethers-providers = "2.0"
+polkavm = "0.9.3"
+polkavm-linker = "0.9.2"
 risc0-zkvm = "0.21.0"
 serde = "1.0"
 serde_json = "1.0.114"
