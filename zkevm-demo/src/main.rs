@@ -21,7 +21,7 @@ use risc0_zkvm::{default_prover, ExecutorEnv};
 use tracing::info;
 use zkevm_core::{
     ether_trace::{from_ethers_u256, Http, Provider},
-    Env, EvmResult, EVM,
+    Env, EvmResult, EVM, ZkDb,
 };
 use zkevm_methods::EVM_ELF;
 
@@ -38,21 +38,18 @@ struct Args {
     block_numb: Option<u64>,
 }
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
-        .init();
-    ();
+#[derive(serde::Serialize, serde::Deserialize)]
+struct State {
+    zkdb: ZkDb,
+    env: Env,
+}
 
-    let args = Args::parse();
-    let tx_hash = H256::from_str(&args.tx_hash).expect("Invalid transaction hash");
-
-    let client = Provider::<Http>::try_from(args.rpc_url).expect("Invalid RPC url");
+async fn fetch_state(tx_hash: H256, rpc_url: &str, block_numb: Option<u64>) -> State {
+    let client = Provider::<Http>::try_from(rpc_url).expect("Invalid RPC url");
     let client = Arc::new(client);
 
     let tx = client.get_transaction(tx_hash).await.unwrap().unwrap();
-    let block_numb = if let Some(numb) = args.block_numb {
+    let block_numb = if let Some(numb) = block_numb {
         numb
     } else {
         let numb = tx.block_number.unwrap();
@@ -75,17 +72,40 @@ async fn main() {
 
     let res = res.unwrap();
     if !res.result.is_success() {
-        println!("TX failed in pre-flight");
-        return;
+        panic!("TX failed in pre-flight");
     }
 
-    let zkdb = trace_db.create_zkdb();
+    return State {
+        zkdb: trace_db.create_zkdb(),
+        env,
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
+        .init();
+    ();
+
+    let args = Args::parse();
+    let cache_path: std::path::PathBuf = format!("cache/{}.json", args.tx_hash).into();
+
+    if !cache_path.exists() {
+        let tx_hash = H256::from_str(&args.tx_hash).expect("Invalid transaction hash");
+        let state = fetch_state(tx_hash, &args.rpc_url, args.block_numb).await;
+        let state_blob = serde_json::to_vec(&state).expect("failed to serialize state");
+        std::fs::create_dir_all("cache").expect("failed to create cache dir");
+        std::fs::write(&cache_path, state_blob).expect("failed to write to the cache");
+    }
+
+    let state: State = serde_json::from_slice(&std::fs::read(&cache_path).unwrap()).unwrap();
 
     info!("Running zkvm...");
     let exec_env = ExecutorEnv::builder()
-        .write(&env)
+        .write(&state.env)
         .unwrap()
-        .write(&zkdb)
+        .write(&state.zkdb)
         .unwrap()
         .build()
         .unwrap();
