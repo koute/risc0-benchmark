@@ -7,7 +7,7 @@ edition = "2021"
 clap = { version = "4.0", features = ["derive"] }
 ethers-core = "2.0"
 ethers-providers = "2.0"
-risc0-zkvm = { path = "../../risc0/zkvm" }
+risc0-zkvm = "0.21.0"
 serde = "1.0"
 tokio = "1"
 tracing = { version = "0.1", features = ["log"] }
