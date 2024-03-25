@@ -90,7 +90,10 @@ async fn main() {
     ();
 
     let args = Args::parse();
-    let cache_path: std::path::PathBuf = format!("cache/{}.json", args.tx_hash).into();
+    let cache_path: std::path::PathBuf =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("cache")
+            .join(format!("{}.json", args.tx_hash));
 
     if !cache_path.exists() {
         let tx_hash = H256::from_str(&args.tx_hash).expect("Invalid transaction hash");
