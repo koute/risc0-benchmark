@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use revm::{
-    primitives::{AccountInfo, Address, Bytecode, State, B256},
+    primitives::{AccountInfo, Address, Bytecode, State, SuccessReason, B256},
     Database,
 };
 use serde::{Deserialize, Serialize};
@@ -22,13 +22,13 @@ use serde::{Deserialize, Serialize};
 pub use primitive_types::H256;
 pub use revm::{
     primitives::{
-        result::{Eval, ExecutionResult},
+        result::ExecutionResult,
         Env, U256,
     },
-    EVM,
+    EvmBuilder,
 };
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 struct ResTrack<T> {
     idx: usize,
     elms: Vec<T>,
@@ -55,7 +55,7 @@ where
     }
 }
 
-#[derive(Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ZkDb {
     basic: ResTrack<Option<AccountInfo>>,
     code_hash: ResTrack<Bytecode>,
@@ -161,12 +161,12 @@ pub mod ether_trace {
             self.handle.block_on(f)
         }
 
-        pub fn create_zkdb(mut self) -> ZkDb {
+        pub fn create_zkdb(&mut self) -> ZkDb {
             self.db.basic.reset();
             self.db.code_hash.reset();
             self.db.storage.reset();
             self.db.block.reset();
-            self.db
+            self.db.clone()
         }
     }
 
@@ -249,8 +249,28 @@ pub mod ether_trace {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EvmResult {
-    pub exit_reason: Eval,
+    pub reason: SuccessReason,
+    pub gas_used: u64,
+    pub gas_refunded: u64,
+    pub output: revm::primitives::Output,
     pub state: State,
+}
+
+impl From<revm::primitives::ResultAndState> for EvmResult {
+    fn from(res: revm::primitives::ResultAndState) -> Self {
+        match res.result {
+            ExecutionResult::Success { reason, gas_used, gas_refunded, output, .. } => {
+                EvmResult {
+                    reason,
+                    gas_used,
+                    gas_refunded,
+                    output,
+                    state: res.state,
+                }
+            },
+            _ => unimplemented!()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -288,29 +308,29 @@ mod tests {
 
         let trace_db = ether_trace::TraceTx::new(client, Some(block_numb.as_u64())).unwrap();
 
-        // Run the TX with tracing:
-        let mut evm = EVM::new();
-        evm.database(trace_db);
-        evm.env = env.clone();
+        let env_clone = env.clone();
+        let (res, zkdb) = tokio::task::spawn_blocking(move || {
+            let mut evm = EvmBuilder::default()
+            .with_db(trace_db)
+            .with_env(Box::new(env_clone))
+            .build();
 
-        // Trick to allow block_on() blocking in async -> sync -> async
-        let (res, trace_db) = tokio::task::spawn_blocking(move || (evm.transact(), evm.take_db()))
-            .await
-            .unwrap();
-        let res = res.unwrap();
+            let res = evm.transact().unwrap();
+            let zkdb = evm.db_mut().create_zkdb();
 
-        // assert_eq!(res.exit_reason, Return::Return);
+            (res, zkdb)
+        }).await.unwrap();
+
         assert_eq!(res.result.gas_used(), 29316);
-
-        let zkdb = trace_db.create_zkdb();
         assert_eq!(zkdb.basic.elms.len(), 3);
         assert_eq!(zkdb.code_hash.elms.len(), 0);
         assert_eq!(zkdb.storage.elms.len(), 2);
         assert_eq!(zkdb.block.elms.len(), 0);
 
-        let mut evm = EVM::new();
-        evm.database(zkdb);
-        evm.env = env;
+        let mut evm = EvmBuilder::default()
+            .with_db(zkdb)
+            .with_env(Box::new(env))
+            .build();
 
         evm.transact().unwrap();
     }

@@ -20,8 +20,7 @@ use ethers_providers::Middleware;
 use risc0_zkvm::{default_prover, ExecutorEnv};
 use tracing::info;
 use zkevm_core::{
-    ether_trace::{from_ethers_u256, Http, Provider},
-    Env, EvmResult, EVM, ZkDb,
+    ether_trace::{from_ethers_u256, Http, Provider}, Env, EvmBuilder, EvmResult, ZkDb
 };
 use zkevm_methods::EVM_ELF;
 
@@ -61,22 +60,24 @@ async fn fetch_state(tx_hash: H256, rpc_url: &str, block_numb: Option<u64>) -> S
     env.block.number = from_ethers_u256(block_numb.into());
     env.tx = zkevm_core::ether_trace::txenv_from_tx(tx);
     let trace_db = zkevm_core::ether_trace::TraceTx::new(client, Some(block_numb)).unwrap();
+    let env_clone = env.clone();
+    let (res, zkdb) = tokio::task::spawn_blocking(move || {
+        let mut evm = EvmBuilder::default()
+            .with_db(trace_db)
+            .with_env(Box::new(env_clone))
+            .build();
 
-    let mut evm = EVM::new();
-    evm.database(trace_db);
-    evm.env = env.clone();
+        let res = evm.transact().unwrap();
+        let zkdb = evm.db_mut().create_zkdb();
+        (res, zkdb)
+    }).await.unwrap();
 
-    let (res, trace_db) = tokio::task::spawn_blocking(move || (evm.transact(), evm.take_db()))
-        .await
-        .unwrap();
-
-    let res = res.unwrap();
     if !res.result.is_success() {
         panic!("TX failed in pre-flight");
     }
 
     return State {
-        zkdb: trace_db.create_zkdb(),
+        zkdb,
         env,
     }
 }
@@ -120,6 +121,6 @@ async fn main() {
         .journal
         .decode()
         .expect("Failed to deserialize EvmResult");
-    info!("exit reason: {:?}", res.exit_reason);
+    info!("exit reason: {:?}", res.reason);
     info!("state updates: {}", res.state.len());
 }
