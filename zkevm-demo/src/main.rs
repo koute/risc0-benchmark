@@ -31,7 +31,7 @@ struct Args {
     #[clap(short, long)]
     tx_hash: String,
 
-    #[clap(short, long)]
+    #[clap(short, long, default_value = "https://rpc.flashbots.net/")]
     rpc_url: String,
 
     #[clap(short, long)]
