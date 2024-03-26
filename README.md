@@ -37,7 +37,7 @@ A few notes:
 $ ./01-install-polkavm-toolchain.sh
 $ ./01-install-risc0-toolchain.sh
 $ ./02-build-polkavm-guest-program.sh
-RUST_LOG=risc0_zkvm=info cargo run --release --features cuda
+$ RUST_LOG=risc0_zkvm=info cargo run --release --features cuda
 ```
 
 Only Linux is supported.
