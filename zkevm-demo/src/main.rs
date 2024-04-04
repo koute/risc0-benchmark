@@ -19,11 +19,13 @@ use core::time::Duration;
 use clap::Parser;
 use ethers_core::types::H256;
 use ethers_providers::Middleware;
+#[cfg(feature = "risc0")]
 use risc0_zkvm::{default_prover, ExecutorEnv, Receipt};
 use tracing::info;
 use zkevm_core::{
     ether_trace::{from_ethers_u256, Http, Provider}, Env, EvmBuilder, EvmResult, ZkDb
 };
+#[cfg(feature = "risc0")]
 use zkevm_methods::{EVM_ELF, EVM_ID};
 
 #[derive(Parser, Debug)]
@@ -164,6 +166,7 @@ fn run_polkavm(state: &State) -> (EvmResult, Duration, Duration) {
     (result, elapsed_compilation, elapsed_execution)
 }
 
+#[cfg(feature = "risc0")]
 fn generate_risc0_proof(state: &State) -> (Receipt, EvmResult, Duration) {
     let timestamp = std::time::Instant::now();
     let exec_env = ExecutorEnv::builder()
@@ -185,6 +188,7 @@ fn generate_risc0_proof(state: &State) -> (Receipt, EvmResult, Duration) {
     (receipt, result, elapsed)
 }
 
+#[cfg(feature = "risc0")]
 fn verify_risc0_proof(receipt: Receipt) -> Duration {
     let timestamp = std::time::Instant::now();
     receipt.verify(EVM_ID).expect("verification failed");
@@ -220,14 +224,17 @@ async fn main() {
     println!("  PolkaVM execution: {:.03}ms", polkavm_execution_time.as_secs_f64() * 1000.0);
     println!("  PolkaVM total: {:.03}ms", (polkavm_compilation_time + polkavm_execution_time).as_secs_f64() * 1000.0);
 
-    println!("\nGenerating risc0 proof...");
-    let (receipt, risc0_result, risc0_proof_time) = generate_risc0_proof(&state);
+    #[cfg(feature = "risc0")]
+    {
+        println!("\nGenerating risc0 proof...");
+        let (receipt, risc0_result, risc0_proof_time) = generate_risc0_proof(&state);
 
-    // Make sure the results match.
-    assert_eq!(format!("{:?}", polkavm_result), format!("{:?}", risc0_result));
-    println!("risc0 proof generation time: {:.03}s", risc0_proof_time.as_secs_f64());
+        // Make sure the results match.
+        assert_eq!(format!("{:?}", polkavm_result), format!("{:?}", risc0_result));
+        println!("risc0 proof generation time: {:.03}s", risc0_proof_time.as_secs_f64());
 
-    println!("\nVerifying risc0 proof...");
-    let risc0_validation_time = verify_risc0_proof(receipt);
-    println!("risc0 proof validation time: {:.03}s", risc0_validation_time.as_secs_f64());
+        println!("\nVerifying risc0 proof...");
+        let risc0_validation_time = verify_risc0_proof(receipt);
+        println!("risc0 proof validation time: {:.03}s", risc0_validation_time.as_secs_f64());
+    }
 }
