@@ -14,6 +14,7 @@
 
 use std::{str::FromStr, sync::Arc};
 use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
 use core::time::Duration;
 
 use clap::Parser;
@@ -36,6 +37,9 @@ struct Args {
 
     #[clap(short, long, default_value = "https://rpc.flashbots.net/")]
     rpc_url: String,
+
+    #[clap(short, long)]
+    cache_path: Option<PathBuf>,
 
     #[clap(short, long)]
     block_numb: Option<u64>,
@@ -204,9 +208,8 @@ async fn main() {
 
     let args = Args::parse();
     let cache_path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("cache")
-            .join(format!("{}.json", args.tx_hash));
+        args.cache_path.unwrap_or(Path::new(env!("CARGO_MANIFEST_DIR")).join("cache"))
+           .join(format!("{}.json", args.tx_hash));
 
     if !cache_path.exists() {
         let tx_hash = H256::from_str(&args.tx_hash).expect("Invalid transaction hash");
