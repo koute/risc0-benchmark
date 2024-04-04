@@ -42,6 +42,9 @@ struct Args {
     cache_path: Option<PathBuf>,
 
     #[clap(short, long)]
+    polkavm_elf_blob: Option<PathBuf>,
+
+    #[clap(short, long)]
     block_numb: Option<u64>,
 }
 
@@ -90,16 +93,7 @@ async fn fetch_state(tx_hash: H256, rpc_url: &str, block_numb: Option<u64>) -> S
     }
 }
 
-fn run_polkavm(state: &State) -> (EvmResult, Duration, Duration) {
-    let elf_blob_path =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("target")
-            .join("riscv-guest")
-            .join("riscv32ema-unknown-none-elf")
-            .join("release")
-            .join("evm");
-
+fn run_polkavm(state: &State, elf_blob_path: &Path) -> (EvmResult, Duration, Duration) {
     let elf_blob = std::fs::read(elf_blob_path).unwrap();
 
     // Link the ELF file into a PolkaVM program.
@@ -211,6 +205,21 @@ async fn main() {
         args.cache_path.unwrap_or(Path::new(env!("CARGO_MANIFEST_DIR")).join("cache"))
            .join(format!("{}.json", args.tx_hash));
 
+    let default_elf_blob_path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("target")
+            .join("riscv-guest")
+            .join("riscv32ema-unknown-none-elf")
+            .join("release")
+            .join("evm");
+
+    let elf_blob_path = args.polkavm_elf_blob.unwrap_or(default_elf_blob_path);
+    if !elf_blob_path.exists() {
+        eprintln!("ERROR: ELF blob at {elf_blob_path:?} doesn't exist");
+        return;
+    }
+
     if !cache_path.exists() {
         let tx_hash = H256::from_str(&args.tx_hash).expect("Invalid transaction hash");
         let state = fetch_state(tx_hash, &args.rpc_url, args.block_numb).await;
@@ -222,7 +231,7 @@ async fn main() {
     let state: State = serde_json::from_slice(&std::fs::read(&cache_path).unwrap()).unwrap();
 
     println!("Running on PolkaVM...");
-    let (polkavm_result, polkavm_compilation_time, polkavm_execution_time) = run_polkavm(&state);
+    let (polkavm_result, polkavm_compilation_time, polkavm_execution_time) = run_polkavm(&state, &elf_blob_path);
     println!("  PolkaVM compilation: {:.03}ms", polkavm_compilation_time.as_secs_f64() * 1000.0);
     println!("  PolkaVM execution: {:.03}ms", polkavm_execution_time.as_secs_f64() * 1000.0);
     println!("  PolkaVM total: {:.03}ms", (polkavm_compilation_time + polkavm_execution_time).as_secs_f64() * 1000.0);
